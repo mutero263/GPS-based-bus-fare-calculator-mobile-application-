@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { router } from 'expo-router';
 
 export default function CalculateFare() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -19,6 +20,7 @@ export default function CalculateFare() {
   const [loading, setLoading] = useState(true);
   const [currentLocationName, setCurrentLocationName] = useState<string | null>(null);
   const [destinationName, setDestinationName] = useState<string | null>(null);
+  const [distance, setDistance] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,80 +67,123 @@ export default function CalculateFare() {
     const dLon = (lon2 - lon1) * (Math.PI / 180);
 
     const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) *
         Math.cos(lat2 * (Math.PI / 180)) *
         Math.sin(dLon / 2) *
         Math.sin(dLon / 2);
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
+    const calculatedDistance = R * c;
 
-    const calculatedFare = (distance * 0.034) + 0.50;
+    setDistance(calculatedDistance);
+
+    const calculatedFare = (calculatedDistance * 0.034) + 0.50;
     setFare(calculatedFare);
+  };
+
+  // Generate unique receipt number: ZIM-YYMMDD-XXXX
+  const generateReceiptId = () => {
+    const now = new Date();
+    const datePart = now.toISOString().slice(2, 10).replace(/-/g, '').slice(2); // YYMMDD
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `MUT-${datePart}-${randomPart}`;
+  };
+
+  // Navigate to receipt page with trip data
+  const handleGenerateReceipt = () => {
+    if (!location || !destination || fare === null || distance === null) return;
+
+    const receiptId = generateReceiptId();
+    const timestamp = new Date().toISOString();
+
+    router.push({
+      pathname: '/receipt',
+      params: {
+        receiptId,
+        from: currentLocationName || 'Unknown',
+        to: destinationName || 'Unknown',
+        distanceKm: distance.toFixed(2),
+        fareUSD: fare.toFixed(2),
+        timestamp,
+        fromLat: location.coords.latitude.toString(),
+        fromLng: location.coords.longitude.toString(),
+        toLat: destination.latitude.toString(),
+        toLng: destination.longitude.toString(),
+      },
+    });
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {location && (
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }}
-          onPress={handleMapPress}>
-          <Marker
-            coordinate={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            }}
-            title="Your Location"
-            pinColor="#007AFF"
-          />
+      <View style={styles.container}>
+        {location && (
+            <MapView
+                style={styles.map}
+                initialRegion={{
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                  latitudeDelta: 0.0922,
+                  longitudeDelta: 0.0421,
+                }}
+                onPress={handleMapPress}>
+              <Marker
+                  coordinate={{
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                  }}
+                  title="Your Location"
+                  pinColor="#007AFF"
+              />
+              {destination && (
+                  <Marker
+                      coordinate={destination}
+                      title="Destination"
+                      pinColor="#FF3B30"
+                  />
+              )}
+            </MapView>
+        )}
+
+        <View style={styles.bottomSheet}>
+          <Text style={styles.instructions}>
+            {destination
+                ? 'Tap "Calculate Fare" to see your fare'
+                : 'Select destination on the map'}
+          </Text>
+
           {destination && (
-            <Marker
-              coordinate={destination}
-              title="Destination"
-              pinColor="#FF3B30"
-            />
+              <TouchableOpacity style={styles.button} onPress={calculateFare}>
+                <Text style={styles.buttonText}>Calculate Fare</Text>
+              </TouchableOpacity>
           )}
-        </MapView>
-      )}
 
-      <View style={styles.bottomSheet}>
-        <Text style={styles.instructions}>
-          {destination
-            ? 'Tap "Calculate Fare" to see your fare'
-            : 'Select destination on the map'}
-        </Text>
+          {fare !== null && (
+              <View style={styles.fareContainer}>
+                <Text style={styles.fareLabel}>Bus Fare:</Text>
+                <Text style={styles.fareAmount}>${fare.toFixed(2)}</Text>
+                <Text style={styles.locationLabel}>From: {currentLocationName}</Text>
+                <Text style={styles.locationLabel}>To: {destinationName}</Text>
+                <Text style={styles.locationLabel}>Distance: {distance?.toFixed(1)} km</Text>
 
-        {destination && (
-          <TouchableOpacity style={styles.button} onPress={calculateFare}>
-            <Text style={styles.buttonText}>Calculate Fare</Text>
-          </TouchableOpacity>
-        )}
-
-        {fare !== null && (
-          <View style={styles.fareContainer}>
-            <Text style={styles.fareLabel}>Bus Fare:</Text>
-            <Text style={styles.fareAmount}>${fare.toFixed(2)}</Text>
-            <Text style={styles.locationLabel}>Current Location: {currentLocationName}</Text>
-            <Text style={styles.locationLabel}>Destination: {destinationName}</Text>
-          </View>
-        )}
+                {/* 🎫 Generate Receipt Button */}
+                <TouchableOpacity
+                    style={[styles.button, styles.receiptButton]}
+                    onPress={handleGenerateReceipt}
+                >
+                  <Text style={styles.buttonText}>🎫 Generate Receipt</Text>
+                </TouchableOpacity>
+              </View>
+          )}
+        </View>
       </View>
-    </View>
   );
 }
 
@@ -180,6 +225,10 @@ const styles = StyleSheet.create({
     height: 50,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 12,
+  },
+  receiptButton: {
+    backgroundColor: '#25D366', // WhatsApp green for receipt action
   },
   buttonText: {
     color: '#fff',
@@ -199,10 +248,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#007AFF',
+    marginBottom: 8,
   },
   locationLabel: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
-    marginTop: 5,
+    marginTop: 4,
   },
 });
