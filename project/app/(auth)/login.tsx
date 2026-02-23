@@ -31,7 +31,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Bus size={48} color="#fff" />
-          <Text style={styles.title}>Mutero</Text>
+          <Text style={styles.title}>mutero263</Text>
           <Text style={styles.subtitle}>Bus Fare Calculator</Text>
         </View>
 
