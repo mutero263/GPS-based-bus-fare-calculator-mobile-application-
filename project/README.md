@@ -20,3 +20,6 @@ npm install react@19.0.0 react-native@0.79.2 --legacy-peer-deps
 
 # 4. Update @types/react to match React 19
 npm install -D @types/react@19.0.0 --legacy-peer-deps
+
+# pdf generating
+npx expo install expo-print expo-sharing expo-file-system @react-native-async-storage/async-storage lucide-react-native
