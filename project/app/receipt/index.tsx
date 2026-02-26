@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import {
     Ticket,
     MapPin,
@@ -18,19 +20,20 @@ import {
     DollarSign,
     Share2,
     Save,
+    Download,
     ArrowLeft,
     Calendar,
     Hash,
     Navigation,
 } from 'lucide-react-native';
 
-// eslint-disable-next-line import/no-default-export
+// eslint-disable-next-line import/no-default-export, spellcheck/spell-checker
 export default function ReceiptPage() {
     const params = useLocalSearchParams();
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [generatingPdf, setGeneratingPdf] = useState(false);
 
-    // Safe param parsing
+    // Safe param parsing helpers
     const safeString = (val: any, fallback: string): string =>
         typeof val === 'string' && val ? val : fallback;
 
@@ -53,12 +56,7 @@ export default function ReceiptPage() {
     };
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            if (!receiptData.receiptId || receiptData.receiptId === 'N/A') {
-                console.warn('Receipt loaded without valid data');
-            }
-            setLoading(false);
-        }, 300);
+        const timer = setTimeout(() => setLoading(false), 300);
         return () => clearTimeout(timer);
     }, []);
 
@@ -74,8 +72,149 @@ export default function ReceiptPage() {
     const usdToZwlRate = 13500;
     const fareZWL = receiptData.fareUSD * usdToZwlRate;
 
+    // Generate PDF HTML Template
+    const generatePdfHtml = () => {
+        return `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #f5f5f5; }
+            .receipt { background: #fff; border-radius: 16px; padding: 24px; max-width: 400px; margin: 0 auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+            .header { text-align: center; border-bottom: 2px solid #007AFF; padding-bottom: 16px; margin-bottom: 20px; }
+            .title { font-size: 24px; font-weight: bold; color: #333; display: flex; align-items: center; justify-content: center; gap: 10px; }
+            .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+            .label { color: #666; font-size: 14px; font-weight: 500; }
+            .value { color: #333; font-size: 14px; font-weight: 600; text-align: right; }
+            .route-box { background: #f8f8f8; border-radius: 12px; padding: 16px; margin: 16px 0; }
+            .route-point { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+            .dot { width: 12px; height: 12px; border-radius: 50%; }
+            .dot-blue { background: #007AFF; }
+            .dot-red { background: #FF3B30; }
+            .route-text { flex: 1; }
+            .route-label { font-size: 12px; color: #666; }
+            .route-name { font-size: 15px; font-weight: 600; color: #333; }
+            .fare-box { background: #f0f8ff; border-radius: 12px; padding: 16px; margin: 16px 0; }
+            .fare-total { font-size: 28px; font-weight: bold; color: #007AFF; text-align: right; }
+            .footer { text-align: center; border-top: 2px solid #007AFF; padding-top: 16px; margin-top: 24px; }
+            .footer-text { font-size: 18px; font-weight: bold; color: #333; }
+            .footer-sub { font-size: 12px; color: #666; margin-top: 4px; }
+            .watermark { text-align: center; color: #999; font-size: 10px; margin-top: 16px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="header">
+              <div class="title">🎫 FARE RECEIPT</div>
+            </div>
+            <div class="info-row">
+              <span class="label">🆔 Receipt #</span>
+              <span class="value">${receiptData.receiptId}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">📅 Date & Time</span>
+              <span class="value">${formatTimestamp(receiptData.timestamp)}</span>
+            </div>
+            <div class="route-box">
+              <div class="route-point">
+                <div class="dot dot-blue"></div>
+                <div class="route-text">
+                  <div class="route-label">From</div>
+                  <div class="route-name">${receiptData.from}</div>
+                </div>
+              </div>
+              <div style="width: 2px; height: 20px; background: #ddd; margin: 4px 0 4px 5px;"></div>
+              <div class="route-point">
+                <div class="dot dot-red"></div>
+                <div class="route-text">
+                  <div class="route-label">To</div>
+                  <div class="route-name">${receiptData.to}</div>
+                </div>
+              </div>
+            </div>
+            <div class="info-row">
+              <span class="label">📏 Distance</span>
+              <span class="value">${receiptData.distanceKm.toFixed(1)} km</span>
+            </div>
+            <div class="fare-box">
+              <div style="font-size: 12px; color: #666; margin-bottom: 8px; font-style: italic;">
+                Formula: (${receiptData.distanceKm.toFixed(1)} × $0.034) + $0.50
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="label">Total Fare:</span>
+                <span class="fare-total">$${receiptData.fareUSD.toFixed(2)} USD</span>
+              </div>
+              <div style="text-align: right; font-size: 13px; color: #666; margin-top: 4px;">
+                ≈ ZWL ${fareZWL.toLocaleString()}
+              </div>
+            </div>
+            <div class="footer">
+              <div class="footer-text">🇿🇼 Mutero263</div>
+              <div class="footer-sub">GPS Fare Calculator</div>
+              <div class="watermark">Generated on ${new Date().toLocaleDateString()}</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    };
+
+    // Generate and Share PDF (SDK 54 Simple Approach)
+    const handleDownloadPdf = async () => {
+        setGeneratingPdf(true);
+        try {
+            // Generate PDF file - returns a valid file URI
+            const { uri } = await Print.printToFileAsync({
+                html: generatePdfHtml(),
+            });
+
+            // Share the PDF directly using the URI from printToFileAsync
+            const canShare = await Sharing.isAvailableAsync();
+            if (canShare) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Save Receipt',
+                });
+            } else {
+                Alert.alert('✓ Ready!', 'PDF generated. Use a file manager to access it.');
+            }
+        } catch (err) {
+            console.error('PDF error:', err);
+            Alert.alert('Error', 'Could not generate PDF. Please try again.');
+        } finally {
+            setGeneratingPdf(false);
+        }
+    };
+
+    // Save to History ONLY (No PDF)
+    const handleSaveReceipt = async () => {
+        try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+
+            const existing = await AsyncStorage.getItem('receipts');
+            const receipts = existing ? JSON.parse(existing) : [];
+
+            const newReceipt = {
+                ...receiptData,
+                savedAt: new Date().toISOString(),
+            };
+
+            receipts.unshift(newReceipt);
+            await AsyncStorage.setItem('receipts', JSON.stringify(receipts));
+
+            Alert.alert('✓ Saved!', 'Receipt saved to your history.');
+        } catch (err) {
+            console.error('Save error:', err);
+            Alert.alert('Error', 'Could not save receipt.');
+        }
+    };
+
+    // Share via WhatsApp (Text + PDF Option)
     const handleShareWhatsApp = async () => {
-        const shareText = `Bus Fare Receipt
+        const shareText = `Bus Fare Receipt - Mutero263
 Receipt #: ${receiptData.receiptId}
 Date: ${formatTimestamp(receiptData.timestamp)}
 
@@ -84,41 +223,35 @@ To: ${receiptData.to}
 Distance: ${receiptData.distanceKm.toFixed(1)} km
 Fare: $${receiptData.fareUSD.toFixed(2)} USD
 
+📎 PDF receipt available - tap Download to save!
+
 Mutero263 GPS Fare Calculator`;
 
-        try {
-            await Share.share({ message: shareText, title: 'Bus Fare Receipt' });
-        } catch {
-            Alert.alert('Error', 'Could not share receipt.');
-        }
-    };
-
-    const handleSaveReceipt = async () => {
-        try {
-            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-            const existing = await AsyncStorage.getItem('receipts');
-            const receipts = existing ? JSON.parse(existing) : [];
-            receipts.unshift({ ...receiptData, savedAt: new Date().toISOString() });
-            await AsyncStorage.setItem('receipts', JSON.stringify(receipts));
-            Alert.alert('✓ Saved!', 'Receipt saved to history.');
-        } catch {
-            Alert.alert('Error', 'Could not save receipt.');
-        }
+        Alert.alert(
+            'Share Receipt',
+            'How would you like to share?',
+            [
+                {
+                    text: 'Share Text Only',
+                    onPress: async () => {
+                        try {
+                            await Share.share({ message: shareText, title: 'Bus Fare Receipt' });
+                        } catch {
+                            Alert.alert('Error', 'Could not share.');
+                        }
+                    },
+                },
+                {
+                    text: 'Share PDF',
+                    onPress: handleDownloadPdf,
+                },
+                { text: 'Cancel', style: 'cancel' },
+            ],
+            { cancelable: true }
+        );
     };
 
     const handleBack = () => router.back();
-
-    if (error) {
-        return (
-            <View style={styles.centered}>
-                <Text style={styles.errorTitle}>Error</Text>
-                <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity style={styles.button} onPress={handleBack}>
-                    <Text style={styles.buttonText}>Go Back</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
 
     if (loading) {
         return (
@@ -237,7 +370,6 @@ Mutero263 GPS Fare Calculator`;
                             <Text style={styles.fareLabel}>Total:</Text>
                             <Text style={styles.fareAmount}>${receiptData.fareUSD.toFixed(2)} USD</Text>
                         </View>
-                        <Text style={styles.fareZWL}>≈ ZWL {fareZWL.toLocaleString()}</Text>
                     </View>
                 </View>
 
@@ -251,15 +383,33 @@ Mutero263 GPS Fare Calculator`;
                 </View>
             </View>
 
-            {/* Buttons */}
+            {/* Action Buttons */}
             <View style={styles.btnContainer}>
-                <TouchableOpacity style={[styles.btn, styles.shareBtn]} onPress={handleShareWhatsApp}>
+                <TouchableOpacity
+                    style={[styles.btn, styles.shareBtn]}
+                    onPress={handleShareWhatsApp}
+                    disabled={generatingPdf}
+                >
                     <Share2 size={20} color="#fff" />
-                    <Text style={styles.btnText}>Share via WhatsApp</Text>
+                    <Text style={styles.btnText}>{generatingPdf ? 'Generating...' : 'Share via WhatsApp'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.saveBtn]} onPress={handleSaveReceipt}>
+
+                <TouchableOpacity
+                    style={[styles.btn, styles.saveBtn]}
+                    onPress={handleSaveReceipt}
+                    disabled={generatingPdf}
+                >
                     <Save size={20} color="#fff" />
                     <Text style={styles.btnText}>Save to History</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.btn, styles.downloadBtn]}
+                    onPress={handleDownloadPdf}
+                    disabled={generatingPdf}
+                >
+                    <Download size={20} color="#fff" />
+                    <Text style={styles.btnText}>{generatingPdf ? 'Generating...' : 'Download PDF'}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -272,8 +422,6 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f5f5f5' },
     content: { padding: 16 },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 20 },
-    errorTitle: { fontSize: 24, fontWeight: 'bold', color: '#FF3B30', marginBottom: 16 },
-    errorText: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 24 },
     header: { marginBottom: 16 },
     backButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
     backText: { color: '#007AFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
@@ -314,8 +462,7 @@ const styles = StyleSheet.create({
     btn: { flexDirection: 'row', borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
     shareBtn: { backgroundColor: '#25D366' },
     saveBtn: { backgroundColor: '#007AFF' },
+    downloadBtn: { backgroundColor: '#FF9500' },
     btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
     spacer: { height: 40 },
-    button: { backgroundColor: '#007AFF', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, marginTop: 16 },
-    buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
