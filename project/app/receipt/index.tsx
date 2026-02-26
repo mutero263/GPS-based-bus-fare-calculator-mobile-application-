@@ -278,7 +278,7 @@ Mutero263 GPS Fare Calculator`;
                 {/* Title */}
                 <View style={styles.titleRow}>
                     <Ticket size={32} color="#007AFF" />
-                    <Text style={styles.title}>FARE RECEIPT</Text>
+                    <Text style={styles.title}>FARE TICKET</Text>
                 </View>
                 <View style={styles.divider} />
 
@@ -286,7 +286,7 @@ Mutero263 GPS Fare Calculator`;
                 <View style={styles.row}>
                     <View style={styles.rowLeft}>
                         <Hash size={16} color="#666" />
-                        <Text style={styles.label}>Receipt #</Text>
+                        <Text style={styles.label}>Ticket #</Text>
                     </View>
                     <Text style={styles.value}>{receiptData.receiptId}</Text>
                 </View>
@@ -400,16 +400,7 @@ Mutero263 GPS Fare Calculator`;
                     disabled={generatingPdf}
                 >
                     <Save size={20} color="#fff" />
-                    <Text style={styles.btnText}>Save to History</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.btn, styles.downloadBtn]}
-                    onPress={handleDownloadPdf}
-                    disabled={generatingPdf}
-                >
-                    <Download size={20} color="#fff" />
-                    <Text style={styles.btnText}>{generatingPdf ? 'Generating...' : 'Download PDF'}</Text>
+                    <Text style={styles.btnText}>Save</Text>
                 </TouchableOpacity>
             </View>
 
