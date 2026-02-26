@@ -33,7 +33,7 @@ export default function ReceiptPage() {
     const [loading, setLoading] = useState(true);
     const [generatingPdf, setGeneratingPdf] = useState(false);
 
-    // Safe param parsing helpers
+    // Safe param parsing
     const safeString = (val: any, fallback: string): string =>
         typeof val === 'string' && val ? val : fallback;
 
@@ -162,7 +162,7 @@ export default function ReceiptPage() {
     `;
     };
 
-    // Generate and Share PDF (SDK 54 Simple Approach)
+    // Generate and Share PDF
     const handleDownloadPdf = async () => {
         setGeneratingPdf(true);
         try {
@@ -189,7 +189,7 @@ export default function ReceiptPage() {
         }
     };
 
-    // Save to History ONLY (No PDF)
+    // Save
     const handleSaveReceipt = async () => {
         try {
             const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -212,7 +212,7 @@ export default function ReceiptPage() {
         }
     };
 
-    // Share via WhatsApp (Text + PDF Option)
+    // Share via WhatsApp
     const handleShareWhatsApp = async () => {
         const shareText = `Bus Fare Receipt - Mutero263
 Receipt #: ${receiptData.receiptId}
